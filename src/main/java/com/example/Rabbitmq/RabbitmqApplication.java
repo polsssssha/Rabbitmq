@@ -1,67 +1,56 @@
 package com.example.Rabbitmq;
 
-import org.springframework.amqp.core.*;
+import org.springframework.amqp.core.Binding;
+import org.springframework.amqp.core.BindingBuilder;
+import org.springframework.amqp.core.FanoutExchange;
+import org.springframework.amqp.core.Queue;
 import org.springframework.amqp.rabbit.connection.ConnectionFactory;
 import org.springframework.amqp.rabbit.listener.SimpleMessageListenerContainer;
 import org.springframework.amqp.rabbit.listener.adapter.MessageListenerAdapter;
-import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;
 
-import java.util.Scanner;
+import java.lang.management.ManagementFactory;
 
 @SpringBootApplication
 public class RabbitmqApplication {
-	private static final String EXCHANGE_NAME = "message_exchange";
-	public static void main(String[] args) {
-		SpringApplication.run(RabbitmqApplication.class, args);
+
+	static final String fanoutExchangeName = "spring-boot-exchange";
+
+	static final String queueName = "spring-boot-" + ManagementFactory.getRuntimeMXBean().getStartTime();
+
+	@Bean
+	Queue queue() {
+		return new Queue(queueName, false, true, true);
 	}
 
 	@Bean
-	public CommandLineRunner runner(AmqpTemplate template) {
-		return args -> {
-			Scanner scanner = new Scanner(System.in);
-			while (true) {
-				System.out.print("Enter message: ");
-				String message = scanner.nextLine();
-				template.convertAndSend(EXCHANGE_NAME, "", message);
-			}
-		};
-	}
-	@Bean
-	public Queue queue() {
-		return new AnonymousQueue();
+	FanoutExchange exchange() {
+		return new FanoutExchange(fanoutExchangeName);
 	}
 
 	@Bean
-	public FanoutExchange exchange() {
-		return new FanoutExchange(EXCHANGE_NAME);
-	}
-
-	@Bean
-	public Binding binding(Queue queue, FanoutExchange exchange) {
+	Binding binding(Queue queue, FanoutExchange exchange) {
 		return BindingBuilder.bind(queue).to(exchange);
 	}
 
 	@Bean
-	public SimpleMessageListenerContainer container(ConnectionFactory connectionFactory,
-													MessageListenerAdapter listenerAdapter,
-													Queue queue) {
+	SimpleMessageListenerContainer container(ConnectionFactory connectionFactory,
+											 MessageListenerAdapter listenerAdapter) {
 		SimpleMessageListenerContainer container = new SimpleMessageListenerContainer();
 		container.setConnectionFactory(connectionFactory);
-		container.setQueues(queue);
+		container.setQueueNames(queueName);
 		container.setMessageListener(listenerAdapter);
 		return container;
 	}
 
 	@Bean
-	public MessageListenerAdapter listenerAdapter(MessageReceiver receiver) {
+	MessageListenerAdapter listenerAdapter(MessageReceiver receiver) {
 		return new MessageListenerAdapter(receiver, "receiveMessage");
 	}
 
-	@Bean
-	public MessageReceiver receiver() {
-		return new MessageReceiver();
+	public static void main(String[] args) throws InterruptedException {
+		SpringApplication.run(RabbitmqApplication.class, args).close();
 	}
 }
